@@ -1,0 +1,146 @@
+# Basic Usage
+
+Learn how to trigger and monitor events using the `@protoworx/react-ripple-effect` event bus.
+
+## Overview
+
+The event bus enables decoupled communication between React components. Components can trigger events without knowing who's listening, and components can listen for events without knowing who's triggering them.
+
+## Setup
+
+First, create an `EventDriver` instance and wrap your app with `EventProvider`:
+
+```tsx
+"use client";
+
+import {
+  EventDriver,
+  EventProvider,
+  useMonitorEvent,
+  useTriggerEvent,
+} from "@protoworx/react-ripple-effect";
+
+const client = new EventDriver();
+
+export default function App() {
+  return (
+    <EventProvider client={client}>
+      <YourComponents />
+    </EventProvider>
+  );
+}
+```
+
+## Triggering Events
+
+Use the `useTriggerEvent` hook to trigger events from any component:
+
+```tsx
+"use client";
+
+import { useTriggerEvent } from "@protoworx/react-ripple-effect";
+
+function Button() {
+  const trigger = useTriggerEvent();
+
+  return (
+    <button onClick={() => trigger("button-clicked", { id: 123 })}>
+      Click Me
+    </button>
+  );
+}
+```
+
+## Monitoring Events
+
+Use the `useMonitorEvent` hook to listen for events:
+
+```tsx
+"use client";
+
+import { useMonitorEvent } from "@protoworx/react-ripple-effect";
+
+function EventLogger() {
+  useMonitorEvent({
+    "button-clicked": (data) => {
+      console.log("Button was clicked!", data);
+    },
+  });
+
+  return <div>Listening for events...</div>;
+}
+```
+
+## Complete Example
+
+Here's a complete example showing trigger and monitor working together:
+
+```tsx
+"use client";
+
+import {
+  EventDriver,
+  EventProvider,
+  useMonitorEvent,
+  useTriggerEvent,
+} from "@protoworx/react-ripple-effect";
+import { useState } from "react";
+
+const client = new EventDriver();
+
+export default function App() {
+  return (
+    <EventProvider client={client}>
+      <CounterButton />
+      <EventDisplay />
+    </EventProvider>
+  );
+}
+
+function CounterButton() {
+  const trigger = useTriggerEvent();
+  const [count, setCount] = useState(0);
+
+  const handleClick = () => {
+    const newCount = count + 1;
+    setCount(newCount);
+    trigger("counter-incremented", { count: newCount });
+  };
+
+  return (
+    <button onClick={handleClick}>
+      Count: {count}
+    </button>
+  );
+}
+
+function EventDisplay() {
+  const [lastEvent, setLastEvent] = useState<string | null>(null);
+
+  useMonitorEvent({
+    "counter-incremented": (data) => {
+      setLastEvent(`Counter is now at ${data.count}`);
+    },
+  });
+
+  return (
+    <div>
+      {lastEvent ? <p>{lastEvent}</p> : <p>No events yet</p>}
+    </div>
+  );
+}
+```
+
+## Key Concepts
+
+- **Event Names**: Use descriptive strings like `"user-logged-in"` or `"cart-updated"`
+- **Event Data**: Pass any data structure as the second parameter to `trigger()`
+- **Multiple Monitors**: Multiple components can monitor the same event
+- **Multiple Events**: A single component can monitor multiple events
+
+## Related Examples
+
+- [TypeScript Examples](/docs/examples/typescript) - Learn about type-safe events
+- [Debounce & Throttle](/docs/examples/debounce-throttle) - Control event frequency
+- [Async Callbacks](/docs/examples/async-callbacks) - Handle async operations
+

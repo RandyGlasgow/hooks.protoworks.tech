@@ -1,0 +1,11 @@
+declare module "*.mdx" {
+  import { ComponentType } from "react";
+  const MDXComponent: ComponentType;
+  export default MDXComponent;
+}
+
+declare module "*.md" {
+  import { ComponentType } from "react";
+  const MDXComponent: ComponentType;
+  export default MDXComponent;
+}
