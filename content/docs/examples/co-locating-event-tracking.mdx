@@ -3,6 +3,8 @@ title: Co-locating Event Tracking
 description: Centralize analytics tracking with a single component
 ---
 
+import CoLocatingEventTrackingDemo from '@/components/demo/co-locating-event-tracking';
+
 Instead of scattering analytics calls throughout your application, you can use the event bus to centralize all tracking logic in a single component. This makes your analytics easier to maintain, test, and modify.
 
 ## The Problem
@@ -249,106 +251,111 @@ function AnalyticsTracker() {
 
 ## Complete Example
 
-Here's a complete example with a more realistic analytics setup:
+Here's a complete working example with visual feedback:
 
-```tsx
-"use client";
+<Tabs items={['Demo', 'Code']}>
+  <Tab value="Demo"><CoLocatingEventTrackingDemo /></Tab>
+  <Tab value="Code">
+    ```tsx
+    "use client";
 
-import {
-  EventDriver,
-  EventProvider,
-  useMonitorEvent,
-  useTriggerEvent,
-} from "@protoworx/react-ripple-effect";
+    import {
+      EventDriver,
+      EventProvider,
+      useMonitorEvent,
+      useTriggerEvent,
+    } from "@protoworx/react-ripple-effect";
 
-type AppAnalyticsEvents = {
-  "analytics:user-logged-in": { method: "email" | "google" | "github"; userId: string };
-  "analytics:cart-item-added": { productId: string; productName: string; price: number };
-  "analytics:checkout-completed": { orderId: string; total: number; items: number };
-  "analytics:page-viewed": { path: string; title: string };
-};
+    type AppAnalyticsEvents = {
+      "analytics:user-logged-in": { method: "email" | "google" | "github"; userId: string };
+      "analytics:cart-item-added": { productId: string; productName: string; price: number };
+      "analytics:checkout-completed": { orderId: string; total: number; items: number };
+      "analytics:page-viewed": { path: string; title: string };
+    };
 
-const eventDriver = new EventDriver();
+    const eventDriver = new EventDriver();
 
-export default function App() {
-  return (
-    <EventProvider client={eventDriver}>
-      <AnalyticsTracker />
-      {/* Your app components */}
-    </EventProvider>
-  );
-}
+    export default function App() {
+      return (
+        <EventProvider client={eventDriver}>
+          <AnalyticsTracker />
+          {/* Your app components */}
+        </EventProvider>
+      );
+    }
 
-function AnalyticsTracker() {
-  useMonitorEvent<AppAnalyticsEvents>({
-    "analytics:user-logged-in": (data) => {
-      // Send to your analytics provider
-      window.gtag?.("event", "login", {
-        method: data.method,
-        user_id: data.userId,
+    function AnalyticsTracker() {
+      useMonitorEvent<AppAnalyticsEvents>({
+        "analytics:user-logged-in": (data) => {
+          // Send to your analytics provider
+          window.gtag?.("event", "login", {
+            method: data.method,
+            user_id: data.userId,
+          });
+          
+          // Or use your analytics service
+          fetch("/api/analytics", {
+            method: "POST",
+            body: JSON.stringify({
+              event: "user-logged-in",
+              properties: data,
+            }),
+          });
+        },
+        "analytics:cart-item-added": (data) => {
+          window.gtag?.("event", "add_to_cart", {
+            currency: "USD",
+            value: data.price,
+            items: [{ item_id: data.productId, item_name: data.productName }],
+          });
+        },
+        "analytics:checkout-completed": (data) => {
+          window.gtag?.("event", "purchase", {
+            transaction_id: data.orderId,
+            value: data.total,
+            items: data.items,
+          });
+        },
+        "analytics:page-viewed": {
+          callback: (data) => {
+            window.gtag?.("config", "GA_MEASUREMENT_ID", {
+              page_path: data.path,
+              page_title: data.title,
+            });
+          },
+          throttle: 1000, // Throttle page views
+        },
       });
-      
-      // Or use your analytics service
-      fetch("/api/analytics", {
-        method: "POST",
-        body: JSON.stringify({
-          event: "user-logged-in",
-          properties: data,
-        }),
-      });
-    },
-    "analytics:cart-item-added": (data) => {
-      window.gtag?.("event", "add_to_cart", {
-        currency: "USD",
-        value: data.price,
-        items: [{ item_id: data.productId, item_name: data.productName }],
-      });
-    },
-    "analytics:checkout-completed": (data) => {
-      window.gtag?.("event", "purchase", {
-        transaction_id: data.orderId,
-        value: data.total,
-        items: data.items,
-      });
-    },
-    "analytics:page-viewed": {
-      callback: (data) => {
-        window.gtag?.("config", "GA_MEASUREMENT_ID", {
-          page_path: data.path,
-          page_title: data.title,
+
+      return null;
+    }
+
+    // Usage in your components
+    function ProductCard({ productId, name, price }: ProductProps) {
+      const trigger = useTriggerEvent<AppAnalyticsEvents>();
+
+      const handleAddToCart = () => {
+        // Trigger analytics event
+        trigger("analytics:cart-item-added", {
+          productId,
+          productName: name,
+          price,
         });
-      },
-      throttle: 1000, // Throttle page views
-    },
-  });
+        
+        // Handle actual cart logic
+        addToCart(productId);
+      };
 
-  return null;
-}
-
-// Usage in your components
-function ProductCard({ productId, name, price }: ProductProps) {
-  const trigger = useTriggerEvent<AppAnalyticsEvents>();
-
-  const handleAddToCart = () => {
-    // Trigger analytics event
-    trigger("analytics:cart-item-added", {
-      productId,
-      productName: name,
-      price,
-    });
-    
-    // Handle actual cart logic
-    addToCart(productId);
-  };
-
-  return (
-    <div>
-      <h3>{name}</h3>
-      <button onClick={handleAddToCart}>Add to Cart</button>
-    </div>
-  );
-}
-```
+      return (
+        <div>
+          <h3>{name}</h3>
+          <button onClick={handleAddToCart}>Add to Cart</button>
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
 
 ## Key Takeaways
 

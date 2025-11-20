@@ -1,0 +1,412 @@
+---
+title: State Synchronization Across Components
+description: Keep multiple components in sync without prop drilling using events
+---
+
+import StateSynchronizationDemo from '@/components/demo/state-synchronization';
+
+When multiple components need to stay synchronized with the same state, prop drilling becomes a maintenance nightmare. With an event bus, any component can trigger a state change, and all interested components automatically update. This eliminates the need to pass props through multiple component layers.
+
+## The Problem
+
+Without an event bus, synchronizing state across components requires prop drilling or complex context providers:
+
+```tsx
+// ❌ Prop drilling through multiple layers
+function App() {
+  const [theme, setTheme] = useState("light");
+  
+  return (
+    <Layout theme={theme} onThemeChange={setTheme}>
+      <Header theme={theme} />
+      <Content>
+        <Sidebar theme={theme} />
+        <MainContent>
+          <Card theme={theme} />
+          <Card theme={theme} />
+          <Card theme={theme} />
+        </MainContent>
+      </Content>
+      <Footer theme={theme} />
+    </Layout>
+  );
+}
+
+// Every component needs theme prop, even if it doesn't use it directly
+function Layout({ theme, onThemeChange, children }) {
+  return (
+    <div data-theme={theme}>
+      <ThemeSwitcher onThemeChange={onThemeChange} />
+      {children}
+    </div>
+  );
+}
+```
+
+This approach has several downsides:
+- **Prop drilling**: Props must be passed through every component layer
+- **Tight coupling**: Components are tightly coupled to parent state
+- **Hard to maintain**: Adding a new component requires updating parent components
+- **Performance issues**: Unnecessary re-renders when state changes
+- **Difficult to test**: Components can't be tested independently
+
+## The Solution
+
+With an event bus, components trigger state changes via events, and any component can listen to stay synchronized:
+
+```tsx
+"use client";
+
+import {
+  EventDriver,
+  EventProvider,
+  useMonitorEvent,
+  useTriggerEvent,
+} from "@protoworx/react-ripple-effect";
+
+type ThemeEvents = {
+  "theme:change": { theme: "light" | "dark" | "system" };
+};
+
+const client = new EventDriver();
+
+export default function App() {
+  return (
+    <EventProvider client={client}>
+      <ThemeSwitcher />
+      <Header />
+      <Content>
+        <Card />
+        <Card />
+        <Card />
+      </Content>
+    </EventProvider>
+  );
+}
+
+// Theme switcher triggers events - no props needed!
+function ThemeSwitcher() {
+  const trigger = useTriggerEvent<ThemeEvents>();
+  
+  return (
+    <button onClick={() => trigger("theme:change", { theme: "dark" })}>
+      Toggle Theme
+    </button>
+  );
+}
+
+// Any component can listen and stay synchronized
+function Card() {
+  const [theme, setTheme] = useState("light");
+  
+  useMonitorEvent<ThemeEvents>({
+    "theme:change": (data) => {
+      setTheme(data.theme);
+    },
+  });
+  
+  return <div data-theme={theme}>Card content</div>;
+}
+```
+
+## Benefits
+
+### 1. **No Prop Drilling**
+Components don't need to receive state or callbacks as props. They simply listen to events:
+
+```tsx
+// ✅ No props needed - component listens directly
+function DeeplyNestedComponent() {
+  const [theme, setTheme] = useState("light");
+  
+  useMonitorEvent<ThemeEvents>({
+    "theme:change": (data) => setTheme(data.theme),
+  });
+  
+  return <div>Theme: {theme}</div>;
+}
+```
+
+### 2. **Loose Coupling**
+Components are decoupled from each other. They don't need to know about the component tree structure:
+
+```tsx
+// Components can be anywhere in the tree - they still sync!
+function App() {
+  return (
+    <EventProvider client={client}>
+      <ThemeSwitcher /> {/* Can be anywhere */}
+      <div>
+        <div>
+          <Card /> {/* Automatically syncs */}
+        </div>
+      </div>
+      <Footer /> {/* Also syncs automatically */}
+    </EventProvider>
+  );
+}
+```
+
+### 3. **Easy to Add New Components**
+Add new components that need the same state without modifying existing components:
+
+```tsx
+// Add a new component - no changes to existing code needed!
+function NewComponent() {
+  const [theme, setTheme] = useState("light");
+  
+  useMonitorEvent<ThemeEvents>({
+    "theme:change": (data) => setTheme(data.theme),
+  });
+  
+  return <div>New component with theme: {theme}</div>;
+}
+```
+
+### 4. **Multiple State Sources**
+Multiple components can trigger the same state change:
+
+```tsx
+function ThemeSwitcher() {
+  const trigger = useTriggerEvent<ThemeEvents>();
+  return <button onClick={() => trigger("theme:change", { theme: "dark" })}>Dark</button>;
+}
+
+function KeyboardShortcut() {
+  const trigger = useTriggerEvent<ThemeEvents>();
+  
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === "t") {
+        trigger("theme:change", { theme: "dark" });
+      }
+    };
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [trigger]);
+  
+  return null;
+}
+```
+
+### 5. **Selective Updates**
+Components can choose which state changes to listen to:
+
+```tsx
+function ThemeAwareComponent() {
+  const [theme, setTheme] = useState("light");
+  
+  // Only listens to theme changes
+  useMonitorEvent<ThemeEvents>({
+    "theme:change": (data) => setTheme(data.theme),
+  });
+  
+  return <div>Theme: {theme}</div>;
+}
+
+function OtherComponent() {
+  // Doesn't listen to theme - no unnecessary re-renders!
+  return <div>Static content</div>;
+}
+```
+
+### 6. **Easy Testing**
+Test components independently without needing to set up the entire component tree:
+
+```tsx
+test("Card updates theme on event", () => {
+  const { result } = renderHook(() => {
+    const [theme, setTheme] = useState("light");
+    useMonitorEvent<ThemeEvents>({
+      "theme:change": (data) => setTheme(data.theme),
+    });
+    return theme;
+  });
+  
+  // Trigger event
+  eventDriver.trigger("theme:change", { theme: "dark" });
+  
+  // Verify update
+  expect(result.current).toBe("dark");
+});
+```
+
+## Complete Example
+
+Here's a complete working example showing theme synchronization:
+
+<Tabs items={['Demo', 'Code']}>
+  <Tab value="Demo"><StateSynchronizationDemo /></Tab>
+  <Tab value="Code">
+    ```tsx
+    "use client";
+
+    import { cn } from "@/lib/utils";
+    import {
+      EventDriver,
+      EventProvider,
+      useMonitorEvent,
+      useTriggerEvent,
+    } from "@protoworx/react-ripple-effect";
+    import { useState } from "react";
+
+    const client = new EventDriver();
+
+    type ThemeEvents = {
+      "theme:change": { theme: "light" | "dark" | "system" };
+    };
+
+    export default function App() {
+      return (
+        <EventProvider client={client}>
+          <div className="p-4 border rounded-lg">
+            <div className="flex flex-col gap-6">
+              <ThemeSwitcher />
+              <div className="grid grid-cols-3 gap-4">
+                <ThemeAwareCard title="Card 1" />
+                <ThemeAwareCard title="Card 2" />
+                <ThemeAwareCard title="Card 3" />
+              </div>
+              <ThemeDisplay />
+            </div>
+          </div>
+        </EventProvider>
+      );
+    }
+
+    function ThemeSwitcher() {
+      const trigger = useTriggerEvent<ThemeEvents>();
+      const [currentTheme, setCurrentTheme] = useState<"light" | "dark" | "system">("light");
+
+      const themes = [
+        { value: "light" as const, label: "Light", icon: "☀️" },
+        { value: "dark" as const, label: "Dark", icon: "🌙" },
+        { value: "system" as const, label: "System", icon: "💻" },
+      ];
+
+      const handleThemeChange = (theme: "light" | "dark" | "system") => {
+        setCurrentTheme(theme);
+        trigger("theme:change", { theme });
+      };
+
+      return (
+        <div className="p-4 border rounded-lg bg-card">
+          <h3 className="text-lg font-semibold mb-4">Theme Switcher</h3>
+          <div className="flex gap-2">
+            {themes.map((theme) => (
+              <button
+                key={theme.value}
+                onClick={() => handleThemeChange(theme.value)}
+                className={cn(
+                  "flex-1 px-4 py-3 rounded-lg border",
+                  currentTheme === theme.value
+                    ? "bg-blue-600 text-white"
+                    : "bg-background hover:bg-muted"
+                )}
+              >
+                <div className="text-2xl mb-1">{theme.icon}</div>
+                <div className="text-sm font-medium">{theme.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function ThemeAwareCard({ title }: { title: string }) {
+      const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
+
+      useMonitorEvent<ThemeEvents>({
+        "theme:change": (data: ThemeEvents["theme:change"]) => {
+          setTheme(data.theme);
+        },
+      });
+
+      const getThemeColor = () => {
+        switch (theme) {
+          case "light":
+            return "bg-yellow-50 border-yellow-300 text-yellow-950";
+          case "dark":
+            return "bg-indigo-950 border-indigo-800 text-indigo-100";
+          case "system":
+            return "bg-purple-50 border-purple-300 text-purple-950 dark:bg-purple-950 dark:border-purple-800 dark:text-purple-100";
+          default:
+            return "bg-muted";
+        }
+      };
+
+      const getTitleColor = () => {
+        switch (theme) {
+          case "light":
+            return "text-yellow-950";
+          case "dark":
+            return "text-indigo-50";
+          case "system":
+            return "text-purple-950 dark:text-purple-50";
+          default:
+            return "";
+        }
+      };
+
+      return (
+        <div className={cn("p-6 border-2 rounded-lg", getThemeColor())}>
+          <h4 className={cn("font-semibold mb-2", getTitleColor())}>{title}</h4>
+          <p className="text-sm opacity-80">
+            Current theme: <span className="font-medium">{theme}</span>
+          </p>
+          <p className="text-xs mt-2 opacity-60">
+            This card automatically updates when the theme changes!
+          </p>
+        </div>
+      );
+    }
+
+    function ThemeDisplay() {
+      const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
+      const [updateCount, setUpdateCount] = useState(0);
+
+      useMonitorEvent<ThemeEvents>({
+        "theme:change": (data: ThemeEvents["theme:change"]) => {
+          setTheme(data.theme);
+          setUpdateCount((prev) => prev + 1);
+        },
+      });
+
+      return (
+        <div className="p-4 border rounded-lg bg-card">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold mb-1">Theme State Monitor</h3>
+              <p className="text-sm text-muted-foreground">
+                Listening for theme changes across the app
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-blue-600">{updateCount}</div>
+              <div className="text-xs text-muted-foreground">updates</div>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-muted rounded">
+            <div className="text-sm">
+              <span className="text-muted-foreground">Current theme:</span>{" "}
+              <span className="font-semibold">{theme}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Key Takeaways
+
+- **No prop drilling**: Components listen to events directly instead of receiving props through multiple layers
+- **Loose coupling**: Components don't need to know about the component tree structure
+- **Easy to extend**: Add new components that need the same state without modifying existing code
+- **Multiple sources**: Any component can trigger state changes, not just a single parent
+- **Selective updates**: Components choose which state changes to listen to
+- **Independent testing**: Test components without setting up the entire component tree
+
+This pattern works great for theme switching, user preferences, global filters, feature flags, or any state that needs to be synchronized across multiple components without prop drilling.
+

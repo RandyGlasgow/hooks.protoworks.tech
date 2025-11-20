@@ -1,0 +1,502 @@
+---
+title: LocalStorage Synchronization
+description: Keep components synchronized with localStorage changes, including cross-tab updates
+---
+
+import LocalStorageSyncDemo from '@/components/demo/local-storage-sync';
+
+When you store data in localStorage, components don't automatically know when it changes. This is especially problematic when the same data is displayed in multiple components, or when changes happen in other browser tabs. Using an event bus, you can keep all components synchronized with localStorage changes, both locally and across tabs.
+
+## The Problem
+
+Without an event bus, components that read from localStorage don't update when the data changes:
+
+```tsx
+// ❌ Components don't know when localStorage changes
+function UserProfile() {
+  const [name, setName] = useState(() => {
+    return localStorage.getItem("user-name") || "";
+  });
+
+  return <div>Welcome, {name}!</div>;
+}
+
+function SettingsPanel() {
+  const [name, setName] = useState(() => {
+    return localStorage.getItem("user-name") || "";
+  });
+
+  const handleChange = (newName: string) => {
+    localStorage.setItem("user-name", newName);
+    setName(newName); // Only this component updates!
+  };
+
+  return (
+    <input
+      value={name}
+      onChange={(e) => handleChange(e.target.value)}
+    />
+  );
+}
+
+// UserProfile doesn't update when SettingsPanel changes the name!
+```
+
+This approach has several downsides:
+- **Stale data**: Components show outdated values after localStorage changes
+- **No cross-tab sync**: Changes in one tab don't appear in other tabs
+- **Manual updates**: Each component must manually check for changes
+- **Prop drilling**: Need to pass update functions through component tree
+- **Race conditions**: Multiple components writing to localStorage can conflict
+
+## The Solution
+
+With an event bus, any component that writes to localStorage triggers an event. All components listening to that event automatically update. The browser's `storage` event handles cross-tab synchronization:
+
+```tsx
+"use client";
+
+import {
+  EventDriver,
+  EventProvider,
+  useMonitorEvent,
+  useTriggerEvent,
+} from "@protoworx/react-ripple-effect";
+import { useEffect } from "react";
+
+type StorageEvents = {
+  "storage:change": { key: string; value: string | null; source: "local" | "cross-tab" };
+};
+
+const client = new EventDriver();
+
+// Bridge component that listens to browser storage events
+function StorageManager() {
+  const trigger = useTriggerEvent<StorageEvents>();
+
+  useEffect(() => {
+    // Listen for cross-tab changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "user-name") {
+        trigger("storage:change", {
+          key: e.key,
+          value: e.newValue,
+          source: "cross-tab",
+        });
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [trigger]);
+
+  return null;
+}
+
+// Component that writes to localStorage
+function SettingsPanel() {
+  const trigger = useTriggerEvent<StorageEvents>();
+
+  const handleChange = (newName: string) => {
+    localStorage.setItem("user-name", newName);
+    // Trigger event for local changes
+    trigger("storage:change", {
+      key: "user-name",
+      value: newName,
+      source: "local",
+    });
+  };
+
+  return (
+    <input
+      onChange={(e) => handleChange(e.target.value)}
+    />
+  );
+}
+
+// Component that listens to localStorage changes
+function UserProfile() {
+  const [name, setName] = useState(() => {
+    return localStorage.getItem("user-name") || "";
+  });
+
+  useMonitorEvent<StorageEvents>({
+    "storage:change": (data) => {
+      if (data.key === "user-name") {
+        setName(data.value || "");
+      }
+    },
+  });
+
+  return <div>Welcome, {name}!</div>;
+}
+
+export default function App() {
+  return (
+    <EventProvider client={client}>
+      <StorageManager />
+      <UserProfile />
+      <SettingsPanel />
+    </EventProvider>
+  );
+}
+```
+
+## Benefits
+
+### 1. **Automatic Synchronization**
+Components automatically update when localStorage changes, whether the change is local or from another tab:
+
+```tsx
+function DisplayComponent() {
+  const [preferences, setPreferences] = useState(() => {
+    const stored = localStorage.getItem("preferences");
+    return stored ? JSON.parse(stored) : {};
+  });
+
+  useMonitorEvent<StorageEvents>({
+    "storage:change": (data) => {
+      if (data.key === "preferences") {
+        setPreferences(JSON.parse(data.value || "{}"));
+      }
+    },
+  });
+
+  return <div>{preferences.theme}</div>;
+}
+
+// Any component that updates localStorage will trigger this component to update!
+```
+
+### 2. **Cross-Tab Synchronization**
+Changes in one browser tab automatically appear in all other tabs:
+
+```tsx
+function StorageManager() {
+  const trigger = useTriggerEvent<StorageEvents>();
+
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // Browser fires this event when localStorage changes in another tab
+      trigger("storage:change", {
+        key: e.key,
+        value: e.newValue,
+        source: "cross-tab",
+      });
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [trigger]);
+
+  return null;
+}
+```
+
+### 3. **Multiple Listeners**
+Multiple components can listen to the same localStorage key and stay synchronized:
+
+```tsx
+// All these components stay in sync automatically
+function Header() {
+  const [name, setName] = useState("");
+  useMonitorEvent<StorageEvents>({
+    "storage:change": (data) => {
+      if (data.key === "user-name") setName(data.value || "");
+    },
+  });
+  return <h1>Welcome, {name}!</h1>;
+}
+
+function Sidebar() {
+  const [name, setName] = useState("");
+  useMonitorEvent<StorageEvents>({
+    "storage:change": (data) => {
+      if (data.key === "user-name") setName(data.value || "");
+    },
+  });
+  return <div>User: {name}</div>;
+}
+
+function Profile() {
+  const [name, setName] = useState("");
+  useMonitorEvent<StorageEvents>({
+    "storage:change": (data) => {
+      if (data.key === "user-name") setName(data.value || "");
+    },
+  });
+  return <div>{name}</div>;
+}
+```
+
+### 4. **Source Tracking**
+Know whether changes came from the current tab or another tab:
+
+```tsx
+function PreferencesDisplay() {
+  const [source, setSource] = useState<"local" | "cross-tab" | null>(null);
+
+  useMonitorEvent<StorageEvents>({
+    "storage:change": (data) => {
+      setSource(data.source);
+      // Show indicator: "Updated from another tab" vs "Updated locally"
+    },
+  });
+
+  return (
+    <div>
+      {source === "cross-tab" && (
+        <span>🌐 Synced from another tab</span>
+      )}
+    </div>
+  );
+}
+```
+
+### 5. **Centralized Storage Logic**
+Create a reusable hook or utility for localStorage with event synchronization:
+
+```tsx
+function useLocalStorage(key: string) {
+  const trigger = useTriggerEvent<StorageEvents>();
+  const [value, setValue] = useState<string | null>(() => {
+    return localStorage.getItem(key);
+  });
+
+  useMonitorEvent<StorageEvents>({
+    "storage:change": (data) => {
+      if (data.key === key) {
+        setValue(data.value);
+      }
+    },
+  });
+
+  const setItem = (newValue: string) => {
+    localStorage.setItem(key, newValue);
+    trigger("storage:change", {
+      key,
+      value: newValue,
+      source: "local",
+    });
+    setValue(newValue);
+  };
+
+  return [value, setItem] as const;
+}
+
+// Use it anywhere
+function MyComponent() {
+  const [theme, setTheme] = useLocalStorage("theme");
+  // Automatically syncs with all other components using the same key!
+}
+```
+
+### 6. **Change History**
+Track all localStorage changes for debugging or audit purposes:
+
+```tsx
+function StorageMonitor() {
+  const [history, setHistory] = useState<Array<{key: string; value: string; time: string}>>([]);
+
+  useMonitorEvent<StorageEvents>({
+    "storage:change": (data) => {
+      setHistory((prev) => [
+        {
+          key: data.key,
+          value: data.value || "",
+          time: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+    },
+  });
+
+  return (
+    <div>
+      {history.map((entry, i) => (
+        <div key={i}>
+          {entry.time}: {entry.key} = {entry.value}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Complete Example
+
+Here's a complete working example with user preferences:
+
+<Tabs items={['Demo', 'Code']}>
+  <Tab value="Demo"><LocalStorageSyncDemo /></Tab>
+  <Tab value="Code">
+    ```tsx
+    "use client";
+
+    import {
+      EventDriver,
+      EventProvider,
+      useMonitorEvent,
+      useTriggerEvent,
+    } from "@protoworx/react-ripple-effect";
+    import { useEffect, useState } from "react";
+
+    const client = new EventDriver();
+
+    type StorageEvents = {
+      "storage:change": { key: string; value: string | null; source: "local" | "cross-tab" };
+    };
+
+    type UserPreferences = {
+      name: string;
+      theme: "light" | "dark" | "auto";
+      language: "en" | "es" | "fr" | "de";
+    };
+
+    const STORAGE_KEY = "user-preferences";
+
+    // Bridge component for cross-tab synchronization
+    function StorageManager() {
+      const trigger = useTriggerEvent<StorageEvents>();
+
+      useEffect(() => {
+        const handleStorageChange = (e: StorageEvent) => {
+          if (e.key === STORAGE_KEY && e.newValue !== e.oldValue) {
+            trigger("storage:change", {
+              key: e.key,
+              value: e.newValue,
+              source: "cross-tab",
+            });
+          }
+        };
+
+        window.addEventListener("storage", handleStorageChange);
+        return () => window.removeEventListener("storage", handleStorageChange);
+      }, [trigger]);
+
+      return null;
+    }
+
+    // Editor component that writes to localStorage
+    function UserPreferencesEditor() {
+      const trigger = useTriggerEvent<StorageEvents>();
+      const [preferences, setPreferences] = useState<UserPreferences>(() => {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : { name: "", theme: "auto", language: "en" };
+      });
+
+      const updatePreference = <K extends keyof UserPreferences>(
+        key: K,
+        value: UserPreferences[K]
+      ) => {
+        const updated = { ...preferences, [key]: value };
+        setPreferences(updated);
+        const serialized = JSON.stringify(updated);
+        localStorage.setItem(STORAGE_KEY, serialized);
+        trigger("storage:change", {
+          key: STORAGE_KEY,
+          value: serialized,
+          source: "local",
+        });
+      };
+
+      return (
+        <div>
+          <input
+            value={preferences.name}
+            onChange={(e) => updatePreference("name", e.target.value)}
+          />
+          {/* More fields... */}
+        </div>
+      );
+    }
+
+    // Display component that listens to changes
+    function PreferencesDisplay() {
+      const [preferences, setPreferences] = useState<UserPreferences>({
+        name: "",
+        theme: "auto",
+        language: "en",
+      });
+
+      useMonitorEvent<StorageEvents>({
+        "storage:change": (data) => {
+          if (data.key === STORAGE_KEY) {
+            const parsed = data.value ? JSON.parse(data.value) : {};
+            setPreferences(parsed);
+          }
+        },
+      });
+
+      // Load initial value
+      useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          setPreferences(JSON.parse(stored));
+        }
+      }, []);
+
+      return (
+        <div>
+          <p>Name: {preferences.name}</p>
+          <p>Theme: {preferences.theme}</p>
+          <p>Language: {preferences.language}</p>
+        </div>
+      );
+    }
+
+    export default function App() {
+      return (
+        <EventProvider client={client}>
+          <StorageManager />
+          <UserPreferencesEditor />
+          <PreferencesDisplay />
+        </EventProvider>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Key Takeaways
+
+- **Event-driven sync**: Components listen to storage change events instead of polling or manual updates
+- **Cross-tab support**: Use browser's `storage` event to detect changes from other tabs
+- **Source tracking**: Distinguish between local and cross-tab changes
+- **Multiple listeners**: Any number of components can listen to the same localStorage key
+- **Centralized logic**: Create reusable hooks or utilities for localStorage with event sync
+- **Change history**: Track all changes for debugging or audit purposes
+
+## Important Notes
+
+### Browser Storage Event Limitations
+
+The browser's `storage` event only fires when localStorage changes in **another tab**. Changes in the same tab don't trigger the `storage` event, so you need to manually trigger events for local changes:
+
+```tsx
+// ✅ Correct: Trigger event for local changes
+const handleChange = (value: string) => {
+  localStorage.setItem("key", value);
+  trigger("storage:change", { key: "key", value, source: "local" });
+};
+
+// ❌ Wrong: Only localStorage.setItem - no event triggered
+const handleChange = (value: string) => {
+  localStorage.setItem("key", value);
+  // Other components won't know about this change!
+};
+```
+
+### SSR Considerations
+
+When using Next.js or other SSR frameworks, check for `window` before accessing localStorage:
+
+```tsx
+const [value, setValue] = useState<string | null>(() => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("key");
+});
+```
+
+This pattern works great for user preferences, theme settings, shopping cart data, or any state that needs to persist across page reloads and synchronize across browser tabs.
+
