@@ -1,13 +1,71 @@
 ---
-title: Hello World
-description: Your first document
+title: Getting Started
+description: Minimal setup for @protoworx/react-ripple-effect
 ---
 
-Welcome to the docs! You can start writing documents in `/content/docs`.
+`@protoworx/react-ripple-effect` is a tiny, hook-based event bus for React that lets your components communicate via named events.
 
-## What is Next?
+## Install
 
-<Cards>
-  <Card title="Learn more about Next.js" href="https://nextjs.org/docs" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
-</Cards>
+<CodeBlockTabs defaultValue="npm" groupId="package-manager" persist>
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="npm">npm</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="pnpm">pnpm</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="yarn">yarn</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="npm" className="pl-4">
+    npm install @protoworx/react-ripple-effect
+  </CodeBlockTab>
+  <CodeBlockTab value="pnpm" className="pl-4">
+    pnpm add @protoworx/react-ripple-effect
+  </CodeBlockTab>
+  <CodeBlockTab value="yarn" className="pl-4">
+    yarn add @protoworx/react-ripple-effect
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+## Basic Setup
+
+```tsx
+"use client";
+
+import {
+  EventDriver,
+  EventProvider,
+  useMonitorEvent,
+  useTriggerEvent,
+} from "@protoworx/react-ripple-effect";
+
+const client = new EventDriver();
+
+export default function App() {
+  return (
+    <EventProvider client={client}>
+      <TriggerEventButton />
+      <MonitorEventLog />
+    </EventProvider>
+  );
+}
+
+function TriggerEventButton() {
+  const trigger = useTriggerEvent();
+
+  return (
+    <button onClick={() => trigger("test", "Hello, world!")}>
+      Trigger Event
+    </button>
+  );
+}
+
+function MonitorEventLog() {
+  useMonitorEvent({
+    test: (data: string) => {
+      console.log("Test event:", data);
+    },
+  });
+
+  return <div>Listening for "test" events…</div>;
+}
+```
+
+That's it! Wrap your app in `EventProvider`, use `useTriggerEvent` to fire events, and `useMonitorEvent` to react to them.
