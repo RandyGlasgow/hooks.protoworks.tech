@@ -5,8 +5,8 @@
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "app/globals.css",
-    "baseColor": "slate",
+    "css": "app/global.css",
+    "baseColor": "stone",
     "cssVariables": true,
     "prefix": ""
   },
@@ -18,5 +18,8 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-  "registries": {}
+  "registries": {
+    "@magicui": "https://magicui.design/r/{name}.json",
+    "@reui": "https://reui.io/r/{name}.json"
+  }
 }

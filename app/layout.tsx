@@ -1,39 +1,18 @@
-import { LayoutWrapper } from "@/components/layout-wrapper";
-import { getDocsNavigation } from "@/lib/docs-navigation";
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import { ScrollProgress } from "@/components/ui/scroll-progress";
+import { RootProvider } from "fumadocs-ui/provider/next";
+import { Inter } from "next/font/google";
+import "./global.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
-  title:
-    "@protoworx/react-ripple-effect - A tiny, hook-based event bus for React",
-  description:
-    "A lightweight, hook-based event bus for React that lets your components communicate via named events.",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const navigation = getDocsNavigation();
-
+export default function Layout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <LayoutWrapper navigation={navigation}>{children}</LayoutWrapper>
+    <html lang="en" className={inter.className} suppressHydrationWarning>
+      <body className="flex flex-col min-h-screen">
+        <ScrollProgress />
+        <RootProvider>{children}</RootProvider>
       </body>
     </html>
   );
