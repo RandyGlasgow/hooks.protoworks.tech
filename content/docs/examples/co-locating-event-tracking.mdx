@@ -1,0 +1,362 @@
+---
+title: Co-locating Event Tracking
+description: Centralize analytics tracking with a single component
+---
+
+Instead of scattering analytics calls throughout your application, you can use the event bus to centralize all tracking logic in a single component. This makes your analytics easier to maintain, test, and modify.
+
+## The Problem
+
+Without an event bus, analytics calls are scattered across your components:
+
+```tsx
+// ❌ Analytics scattered everywhere
+function LoginButton() {
+  return (
+    <button onClick={() => {
+      analytics.track('user-logged-in', { method: 'email' });
+      // ... login logic
+    }}>
+      Login
+    </button>
+  );
+}
+
+function AddToCartButton({ productId }: { productId: string }) {
+  return (
+    <button onClick={() => {
+      analytics.track('cart-item-added', { productId });
+      // ... add to cart logic
+    }}>
+      Add to Cart
+    </button>
+  );
+}
+
+function CheckoutButton() {
+  return (
+    <button onClick={() => {
+      analytics.track('checkout-started', {});
+      // ... checkout logic
+    }}>
+      Checkout
+    </button>
+  );
+}
+```
+
+This approach has several downsides:
+- Analytics logic is mixed with business logic
+- Hard to update analytics implementation (e.g., switching providers)
+- Difficult to test analytics separately
+- Easy to miss tracking events
+
+## The Solution
+
+With the event bus, components trigger events, and a single `AnalyticsTracker` component handles all analytics:
+
+```tsx
+"use client";
+
+import {
+  EventDriver,
+  EventProvider,
+  useMonitorEvent,
+  useTriggerEvent,
+} from "@protoworx/react-ripple-effect";
+
+// Define your event types for type safety
+type AnalyticsEvents = {
+  "analytics:user-logged-in": { method: string; userId?: string };
+  "analytics:cart-item-added": { productId: string; quantity: number };
+  "analytics:checkout-started": { cartValue: number };
+  "analytics:page-viewed": { path: string; title: string };
+};
+
+const client = new EventDriver();
+
+export default function App() {
+  return (
+    <EventProvider client={client}>
+      <AnalyticsTracker />
+      <LoginButton />
+      <AddToCartButton productId="prod-123" />
+      <CheckoutButton />
+    </EventProvider>
+  );
+}
+
+// Single component handles ALL analytics
+function AnalyticsTracker() {
+  useMonitorEvent<AnalyticsEvents>({
+    "analytics:user-logged-in": (data) => {
+      analytics.track("user-logged-in", data);
+    },
+    "analytics:cart-item-added": (data) => {
+      analytics.track("cart-item-added", data);
+    },
+    "analytics:checkout-started": (data) => {
+      analytics.track("checkout-started", data);
+    },
+    "analytics:page-viewed": (data) => {
+      analytics.track("page-viewed", data);
+    },
+  });
+
+  return null; // This component doesn't render anything
+}
+
+// Components just trigger events - no analytics imports needed!
+function LoginButton() {
+  const trigger = useTriggerEvent<AnalyticsEvents>();
+
+  return (
+    <button
+      onClick={() => {
+        trigger("analytics:user-logged-in", {
+          method: "email",
+          userId: "user-123",
+        });
+        // ... login logic (separated from analytics)
+      }}
+    >
+      Login
+    </button>
+  );
+}
+
+function AddToCartButton({ productId }: { productId: string }) {
+  const trigger = useTriggerEvent<AnalyticsEvents>();
+
+  return (
+    <button
+      onClick={() => {
+        trigger("analytics:cart-item-added", {
+          productId,
+          quantity: 1,
+        });
+        // ... add to cart logic
+      }}
+    >
+      Add to Cart
+    </button>
+  );
+}
+
+function CheckoutButton() {
+  const trigger = useTriggerEvent<AnalyticsEvents>();
+
+  return (
+    <button
+      onClick={() => {
+        trigger("analytics:checkout-started", {
+          cartValue: 99.99,
+        });
+        // ... checkout logic
+      }}
+    >
+      Checkout
+    </button>
+  );
+}
+```
+
+## Benefits
+
+### 1. **Separation of Concerns**
+Components focus on their primary responsibility (UI/logic), while analytics is handled separately.
+
+### 2. **Easy to Update**
+Switching analytics providers or updating tracking logic only requires changes in one place:
+
+```tsx
+function AnalyticsTracker() {
+  useMonitorEvent<AnalyticsEvents>({
+    "analytics:user-logged-in": (data) => {
+      // Switch from Google Analytics to Mixpanel? Just change this!
+      mixpanel.track("user-logged-in", data);
+      // Or send to multiple providers
+      analytics.track("user-logged-in", data);
+      segment.track("user-logged-in", data);
+    },
+    // ... other events
+  });
+
+  return null;
+}
+```
+
+### 3. **Type Safety**
+TypeScript ensures you're tracking the right events with the correct data:
+
+```tsx
+// ✅ TypeScript will catch this error
+trigger("analytics:user-logged-in", {
+  wrongField: "value", // Error: wrongField doesn't exist
+});
+
+// ✅ Correct usage
+trigger("analytics:user-logged-in", {
+  method: "email", // ✅ Correct
+  userId: "user-123", // ✅ Optional field
+});
+```
+
+### 4. **Easy Testing**
+Test analytics separately from component logic:
+
+```tsx
+// Test that events are triggered
+test("LoginButton triggers analytics event", () => {
+  const { result } = renderHook(() => useTriggerEvent<AnalyticsEvents>());
+  
+  // Simulate click
+  fireEvent.click(screen.getByText("Login"));
+  
+  // Verify event was triggered
+  expect(mockEventDriver.trigger).toHaveBeenCalledWith(
+    "analytics:user-logged-in",
+    expect.objectContaining({ method: "email" })
+  );
+});
+```
+
+### 5. **Debouncing & Throttling**
+Easily add performance optimizations to analytics:
+
+```tsx
+function AnalyticsTracker() {
+  useMonitorEvent<AnalyticsEvents>({
+    "analytics:page-viewed": {
+      callback: (data) => {
+        analytics.track("page-viewed", data);
+      },
+      // Throttle page view events to once per second
+      throttle: 1000,
+    },
+    "analytics:search-query": {
+      callback: (data) => {
+        analytics.track("search-query", data);
+      },
+      // Debounce search queries - only track after user stops typing
+      debounce: 500,
+    },
+  });
+
+  return null;
+}
+```
+
+## Complete Example
+
+Here's a complete example with a more realistic analytics setup:
+
+```tsx
+"use client";
+
+import {
+  EventDriver,
+  EventProvider,
+  useMonitorEvent,
+  useTriggerEvent,
+} from "@protoworx/react-ripple-effect";
+
+type AppAnalyticsEvents = {
+  "analytics:user-logged-in": { method: "email" | "google" | "github"; userId: string };
+  "analytics:cart-item-added": { productId: string; productName: string; price: number };
+  "analytics:checkout-completed": { orderId: string; total: number; items: number };
+  "analytics:page-viewed": { path: string; title: string };
+};
+
+const eventDriver = new EventDriver();
+
+export default function App() {
+  return (
+    <EventProvider client={eventDriver}>
+      <AnalyticsTracker />
+      {/* Your app components */}
+    </EventProvider>
+  );
+}
+
+function AnalyticsTracker() {
+  useMonitorEvent<AppAnalyticsEvents>({
+    "analytics:user-logged-in": (data) => {
+      // Send to your analytics provider
+      window.gtag?.("event", "login", {
+        method: data.method,
+        user_id: data.userId,
+      });
+      
+      // Or use your analytics service
+      fetch("/api/analytics", {
+        method: "POST",
+        body: JSON.stringify({
+          event: "user-logged-in",
+          properties: data,
+        }),
+      });
+    },
+    "analytics:cart-item-added": (data) => {
+      window.gtag?.("event", "add_to_cart", {
+        currency: "USD",
+        value: data.price,
+        items: [{ item_id: data.productId, item_name: data.productName }],
+      });
+    },
+    "analytics:checkout-completed": (data) => {
+      window.gtag?.("event", "purchase", {
+        transaction_id: data.orderId,
+        value: data.total,
+        items: data.items,
+      });
+    },
+    "analytics:page-viewed": {
+      callback: (data) => {
+        window.gtag?.("config", "GA_MEASUREMENT_ID", {
+          page_path: data.path,
+          page_title: data.title,
+        });
+      },
+      throttle: 1000, // Throttle page views
+    },
+  });
+
+  return null;
+}
+
+// Usage in your components
+function ProductCard({ productId, name, price }: ProductProps) {
+  const trigger = useTriggerEvent<AppAnalyticsEvents>();
+
+  const handleAddToCart = () => {
+    // Trigger analytics event
+    trigger("analytics:cart-item-added", {
+      productId,
+      productName: name,
+      price,
+    });
+    
+    // Handle actual cart logic
+    addToCart(productId);
+  };
+
+  return (
+    <div>
+      <h3>{name}</h3>
+      <button onClick={handleAddToCart}>Add to Cart</button>
+    </div>
+  );
+}
+```
+
+## Key Takeaways
+
+- **Single source of truth**: All analytics logic lives in one component
+- **Decoupled components**: Components don't need to know about analytics implementation
+- **Type-safe**: TypeScript ensures correct event names and data structures
+- **Maintainable**: Easy to update, test, and debug analytics
+- **Flexible**: Add debouncing, throttling, or multiple providers without touching component code
+
+This pattern works great for any cross-cutting concern: analytics, logging, error tracking, or notifications.
+

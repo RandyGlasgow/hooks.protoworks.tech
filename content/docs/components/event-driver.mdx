@@ -1,0 +1,78 @@
+---
+title: Event Driver 
+description: Event Driver for React
+---
+
+`EventDriver` is a minimal in-memory event bus that enables components to communicate via named events. It provides a simple pub/sub pattern for managing event-driven communication in your application.
+
+## Constructor
+
+```ts
+import { EventDriver } from '@protoworx/react-ripple-effect';
+
+const driver = new EventDriver();
+```
+
+Creates a new `EventDriver` instance. Typically, you'll create a single instance per application (or per logical scope) and share it via `EventProvider`.
+
+## Complete Example
+
+Here's a complete example demonstrating the EventDriver API:
+
+```ts
+import { EventDriver } from '@protoworx/react-ripple-effect';
+
+const driver = new EventDriver();
+
+// Subscribe to multiple events
+const unsubscribe1 = driver.subscribe('user-action', (action: string) => {
+  console.log(`User performed: ${action}`);
+});
+
+const unsubscribe2 = driver.subscribe('user-action', (action: string) => {
+  // Another listener for the same event
+  analytics.track(action);
+});
+
+// Check listener count
+console.log(driver.getListenerCount('user-action')); // 2
+console.log(driver.hasListeners('user-action')); // true
+
+// Trigger the event
+await driver.trigger('user-action', 'button-click');
+
+// Unsubscribe one listener
+unsubscribe1();
+
+console.log(driver.getListenerCount('user-action')); // 1
+
+// Get all active event keys
+console.log(driver.getEventKeys()); // ['user-action']
+
+// Cleanup all listeners
+driver.cleanup();
+
+console.log(driver.getEventKeys()); // []
+console.log(driver.hasListeners('user-action')); // false
+```
+
+## Error Handling
+
+The EventDriver validates inputs and handles errors gracefully:
+
+- **Invalid event key**: Throws an error if the key is not a non-empty string
+- **Invalid callback**: Throws an error if the callback is not a function
+- **Listener errors**: Each listener call is wrapped in a `try/catch` block. If a listener throws an error, it's logged to `console.error` but doesn't prevent other listeners from executing
+
+## Best Practices
+
+- Create a single `EventDriver` instance per application (or per logical scope)
+- Use descriptive event keys like `'user:logged-in'`, `'cart:item-added'`, `'toast.show'`
+- Use `cleanup()` when you want to remove all listeners at once (e.g., when unmounting a feature module)
+
+## API Reference
+
+<AutoTypeTable 
+  path="node_modules/@protoworx/react-ripple-effect/dist/lib/EventDriver.d.ts" 
+  name="EventDriver" 
+/>

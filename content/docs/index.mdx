@@ -13,59 +13,69 @@ description: Minimal setup for @protoworx/react-ripple-effect
     <CodeBlockTabsTrigger value="pnpm">pnpm</CodeBlockTabsTrigger>
     <CodeBlockTabsTrigger value="yarn">yarn</CodeBlockTabsTrigger>
   </CodeBlockTabsList>
-  <CodeBlockTab value="npm" className="pl-4">
-    npm install @protoworx/react-ripple-effect
+  <CodeBlockTab value="npm">
+  ```bash
+  npm install @protoworx/react-ripple-effect
+  ```
   </CodeBlockTab>
-  <CodeBlockTab value="pnpm" className="pl-4">
-    pnpm add @protoworx/react-ripple-effect
+  <CodeBlockTab value="pnpm">
+  ```bash
+  pnpm add @protoworx/react-ripple-effect
+  ```
   </CodeBlockTab>
-  <CodeBlockTab value="yarn" className="pl-4">
-    yarn add @protoworx/react-ripple-effect
+  <CodeBlockTab value="yarn">
+  ```bash
+  yarn add @protoworx/react-ripple-effect
+  ```
   </CodeBlockTab>
 </CodeBlockTabs>
 
+import BasicSetupDemo from '@/components/demo/basic-setup';
+
 ## Basic Setup
+<Tabs items={['Demo', 'Code']}>
+  <Tab value="Demo"><BasicSetupDemo /></Tab>
+  <Tab value="Code">
+    ```tsx
+    "use client";
 
-```tsx
-"use client";
+    import {
+      EventDriver,
+      EventProvider,
+      useMonitorEvent,
+      useTriggerEvent,
+    } from "@protoworx/react-ripple-effect";
 
-import {
-  EventDriver,
-  EventProvider,
-  useMonitorEvent,
-  useTriggerEvent,
-} from "@protoworx/react-ripple-effect";
+    const client = new EventDriver();
 
-const client = new EventDriver();
+    export default function App() {
+      return (
+        <EventProvider client={client}>
+          <TriggerEventButton />
+          <MonitorEventLog />
+        </EventProvider>
+      );
+    }
 
-export default function App() {
-  return (
-    <EventProvider client={client}>
-      <TriggerEventButton />
-      <MonitorEventLog />
-    </EventProvider>
-  );
-}
+    function TriggerEventButton() {
+      const trigger = useTriggerEvent();
 
-function TriggerEventButton() {
-  const trigger = useTriggerEvent();
+      return (
+        <button onClick={() => trigger("test", "Hello, world!")}>
+          Trigger Event
+        </button>
+      );
+    }
 
-  return (
-    <button onClick={() => trigger("test", "Hello, world!")}>
-      Trigger Event
-    </button>
-  );
-}
+    function MonitorEventLog() {
+      useMonitorEvent({
+        test: (data: string) => {
+          console.log("Test event:", data);
+        },
+      });
 
-function MonitorEventLog() {
-  useMonitorEvent({
-    test: (data: string) => {
-      console.log("Test event:", data);
-    },
-  });
-
-  return <div>Listening for "test" events…</div>;
-}
-```
-
-That's it! Wrap your app in `EventProvider`, use `useTriggerEvent` to fire events, and `useMonitorEvent` to react to them.
+      return <div>Listening for "test" events…</div>;
+    }
+    ```
+  </Tab>
+</Tabs>
