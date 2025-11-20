@@ -53,8 +53,8 @@ function WizardContainer() {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
   useMonitorEvent<FormEvents>({
-    "step:change": (data) => setCurrentStep(data.step),
-    "step:validate": (data) => {
+    "step:change": (data: { step: number }) => setCurrentStep(data.step),
+    "step:validate": (data: { step: number; isValid: boolean; data: any }) => {
       if (data.isValid) {
         setCompletedSteps((prev) => new Set([...prev, data.step]));
         setFormData((prev) => ({ ...prev, ...data.data }));

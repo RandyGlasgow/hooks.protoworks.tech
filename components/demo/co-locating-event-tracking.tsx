@@ -55,9 +55,9 @@ function AnalyticsTracker() {
   };
 
   useMonitorEvent<AnalyticsEvents>({
-    "analytics:user-logged-in": (data) => track("user-logged-in", data),
-    "analytics:cart-item-added": (data) => track("cart-item-added", data),
-    "analytics:checkout-started": (data) => track("checkout-started", data),
+    "analytics:user-logged-in": (data: { method: string; userId?: string }) => track("user-logged-in", data),
+    "analytics:cart-item-added": (data: { productId: string; quantity: number }) => track("cart-item-added", data),
+    "analytics:checkout-started": (data: { cartValue: number }) => track("checkout-started", data),
   });
 
   return (

@@ -94,7 +94,7 @@ function ThemeAwareCard({ title }: { title: string }) {
   const [theme, setTheme] = useState<Theme>("light");
 
   useMonitorEvent<ThemeEvents>({
-    "theme:change": (data) => setTheme(data.theme),
+    "theme:change": (data: { theme: Theme }) => setTheme(data.theme),
   });
 
   const config = THEME_CONFIG[theme];
@@ -120,7 +120,7 @@ function ThemeDisplay() {
   const [updateCount, setUpdateCount] = useState(0);
 
   useMonitorEvent<ThemeEvents>({
-    "theme:change": (data) => {
+    "theme:change": (data: { theme: Theme }) => {
       setTheme(data.theme);
       setUpdateCount((prev) => prev + 1);
     },

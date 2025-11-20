@@ -99,7 +99,7 @@ function OrderProcessorMonitor() {
   const trigger = useTriggerEvent<PackageEvents>();
 
   useMonitorEvent<PackageEvents>({
-    "package:order": async (data) => {
+    "package:order": async (data: { orderId: string; customerName: string }) => {
       await new Promise((resolve) => setTimeout(resolve, DELAY()));
       trigger("package:shipped", {
         orderId: data.orderId,
@@ -137,7 +137,7 @@ function OrderCreationMonitor({
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
 }) {
   useMonitorEvent<PackageEvents>({
-    "package:order": async (data) => {
+    "package:order": async (data: { orderId: string; customerName: string }) => {
       setOrders((prev) => [
         { orderId: data.orderId, customerName: data.customerName, status: "idle" },
         ...prev,
@@ -163,7 +163,7 @@ function OrderCompletionMonitor({
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
 }) {
   useMonitorEvent<PackageEvents>({
-    "package:shipped": (data) => {
+    "package:shipped": (data: { orderId: string; trackingNumber: string; carrier: string }) => {
       setOrders((prev) =>
         prev.map((order) =>
           order.orderId === data.orderId &&

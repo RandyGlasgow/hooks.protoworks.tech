@@ -166,7 +166,7 @@ function PreferencesDisplay({ title }: { title: string }) {
   const [updateCount, setUpdateCount] = useState(0);
 
   useMonitorEvent<StorageEvents>({
-    "storage:change": (data) => {
+    "storage:change": (data: { key: string; value: string | null; source: "local" | "cross-tab" }) => {
       if (data.key === STORAGE_KEY) {
         try {
           const parsed = data.value ? JSON.parse(data.value) : DEFAULT_PREFERENCES;
@@ -258,7 +258,7 @@ function StorageMonitor() {
   >([]);
 
   useMonitorEvent<StorageEvents>({
-    "storage:change": (data) => {
+    "storage:change": (data: { key: string; value: string | null; source: "local" | "cross-tab" }) => {
       setStorageValue(data.value);
       setChangeHistory((prev) => [
         {
