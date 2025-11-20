@@ -8,8 +8,10 @@ import {
 } from "@/lib/features";
 import { BookOpen, Star } from "lucide-react";
 import { headers } from "next/headers";
+import Image from "next/image";
 import Link from "next/link";
 import { FaGithub } from "react-icons/fa";
+import logo from "../icon.png";
 
 async function getGitHubData() {
   try {
@@ -83,6 +85,13 @@ export default async function HomePage() {
         id="hero"
         className="h-[95vh] flex flex-col gap-6 justify-center items-center"
       >
+        <Image
+          src={logo}
+          alt="Logo"
+          width={125}
+          height={125}
+          className="mb-4 border border-gray-500/70 border-dashed object-fill shadow-lg rounded-md dark:invert"
+        />
         <h1 className="text-5xl font-bold max-w-3xl text-center tracking-tighter">
           A tiny, hook based <AuroraText>event bus</AuroraText> for React.
         </h1>
